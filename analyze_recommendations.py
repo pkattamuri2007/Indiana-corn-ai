@@ -1,4 +1,5 @@
 import pandas as pd
+from date_utils import parse_date_col
 
 recs = pd.read_csv("recommendations.csv", parse_dates=["date"])
 

@@ -1,6 +1,8 @@
 # train_models.py
 import pandas as pd
 import numpy as np
+from date_utils import parse_date_col
+
 
 from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.metrics import roc_auc_score, f1_score, classification_report
@@ -13,7 +15,7 @@ from sklearn.ensemble import RandomForestClassifier
 # 1) Load labeled data
 # -----------------------
 df = pd.read_csv("labeled_features.csv")
-df["date"] = pd.to_datetime(df["date"])
+df["date"] = parse_date_col(df["date"])
 
 # Identify groups (location) for grouped CV so we don't leak between same field
 groups = df[["latitude", "longitude"]].astype(str).agg("_".join, axis=1)

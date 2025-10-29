@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
+from date_utils import parse_date_col
+
 
 df = pd.read_csv("combined_features.csv")
-df["date"] = pd.to_datetime(df["date"])
+df["date"] = parse_date_col(df["date"])
+
 
 # Ensure sorted per location
 df = df.sort_values(["latitude", "longitude", "date"])

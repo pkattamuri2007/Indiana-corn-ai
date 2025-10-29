@@ -1,10 +1,11 @@
 import pandas as pd
+from date_utils import parse_date_col
 
 # Load cleaned data
 df = pd.read_csv("combined_data_cleaned.csv")
 
 # --- Convert date column to datetime type ---
-df["date"] = pd.to_datetime(df["date"])
+df["date"] = parse_date_col(df["date"])
 
 # --- Sort data for each location ---
 df = df.sort_values(by=["latitude", "longitude", "date"])
