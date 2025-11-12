@@ -1,7 +1,8 @@
 import pandas as pd
 from date_utils import parse_date_col
 
-recs = pd.read_csv("recommendations.csv", parse_dates=["date"])
+recs = pd.read_csv("recommendations.csv")
+recs["date"] = parse_date_col(recs["date"])
 
 # Top planting windows per location (next 30 days if your data includes future)
 plant = (recs[recs["planting_recommendation"]=="Consider planting this week"]

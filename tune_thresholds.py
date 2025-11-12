@@ -1,9 +1,13 @@
 import pandas as pd
 import numpy as np
 from sklearn.metrics import f1_score
+from date_utils import parse_date_col
 
-recs = pd.read_csv("recommendations.csv", parse_dates=["date"])
-labeled = pd.read_csv("labeled_features.csv", parse_dates=["date"])
+recs = pd.read_csv("recommendations.csv")
+labeled = pd.read_csv("labeled_features.csv")
+
+recs["date"] = parse_date_col(recs["date"])
+labeled["date"] = parse_date_col(labeled["date"])
 
 # Join on date+location to access ground truth labels
 key = ["date","latitude","longitude"]

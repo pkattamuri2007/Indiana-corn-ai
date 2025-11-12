@@ -1,76 +1,70 @@
-import os, glob, json
+import json
 import pandas as pd
-from math import isnan
+import glob
+import os
 
-PATTERN = "PowerData_Lat_*_Lon_*.json"
-
-def load_one_json(path):
-    with open(path, "r") as f:
+def load_json_to_long_df(filepath):
+    """
+    Load a single NASA POWER JSON file and flatten it into a long DataFrame:
+    one row per (date, variable, value, lat, lon).
+    """
+    with open(filepath, "r") as f:
         data = json.load(f)
-
-    # Skip API error files
-    if isinstance(data.get("header"), str) and "failed" in data["header"].lower():
-        print(f"⚠️ Skipping error file: {os.path.basename(path)}")
-        return pd.DataFrame()
 
     lat = data["geometry"]["coordinates"][1]
     lon = data["geometry"]["coordinates"][0]
-    params = data["properties"]["parameter"]  # dict: {VAR: {date: value}}
+    params = data["properties"]["parameter"]  # dict: var -> { YYYYMMDD: value }
 
-    # Build long rows: one row per (date, var, value, lat, lon)
     rows = []
     for var, datedict in params.items():
-        for date_str, val in datedict.items():
+        for date_key, value in datedict.items():
             rows.append({
-                "date": date_str,          # e.g., "20150101"
-                "variable": var,           # e.g., "T2M"
-                "value": val,
+                "date": str(date_key),      # POWER gives YYYYMMDD
+                "variable": var,
+                "value": value,
                 "latitude": lat,
                 "longitude": lon
             })
+
     return pd.DataFrame(rows)
 
-def main():
-    files = glob.glob(PATTERN)
+def rebuild(folder=".", out_csv="combined_data.csv", out_long_debug="combined_long_debug.csv"):
+    files = glob.glob(os.path.join(folder, "PowerData_Lat_*_Lon_*.json"))
     if not files:
-        print(f"❌ No files matched pattern: {PATTERN}")
+        print("No POWER JSON files found.")
         return
 
-    long_parts = []
-    for fp in files:
-        df_part = load_one_json(fp)
-        if not df_part.empty:
-            long_parts.append(df_part)
-
-    if not long_parts:
-        print("❌ No usable JSONs found.")
-        return
-
+    # Long form from all files
+    long_parts = [load_json_to_long_df(p) for p in files]
     long_df = pd.concat(long_parts, ignore_index=True)
 
-    # Replace sentinel -999/-999.0 with NaN
-    long_df["value"] = pd.to_numeric(long_df["value"], errors="coerce")
-    long_df.loc[long_df["value"] <= -999, "value"] = pd.NA
+    # Parse POWER YYYYMMDD to calendar date (no epoch!)
+    long_df["date"] = pd.to_datetime(
+        long_df["date"].astype(str).str.zfill(8),
+        format="%Y%m%d",
+        errors="coerce"
+    )
 
-    # Pivot: columns become variables, rows are (date, lat, lon)
-    tidy = long_df.pivot_table(
+    # Optional: save a debug version (helps trace any odd rows)
+    long_df.sort_values(["latitude", "longitude", "date", "variable"], inplace=True)
+    long_df.to_csv(out_long_debug, index=False)
+
+    # Pivot into wide form: one row per (date, lat, lon)
+    wide = long_df.pivot_table(
         index=["date", "latitude", "longitude"],
         columns="variable",
-        values="value"
+        values="value",
+        aggfunc="mean"  # if dupes exist, average them
     ).reset_index()
 
-    # Ensure 'date' stays a column (not index) and sort
-    tidy = tidy.sort_values(["date", "latitude", "longitude"])
+    wide.drop_duplicates(inplace=True)
+    wide.sort_values(["latitude", "longitude", "date"], inplace=True)
+    wide.to_csv(out_csv, index=False)
 
-    # Save both long and wide (tidy) for debugging/inspection if needed
-    long_df.to_csv("combined_long_debug.csv", index=False)
-    tidy.to_csv("combined_data.csv", index=False)
-
-    print("✅ Rebuilt CSVs:")
-    print("  • combined_data.csv (tidy, one row per date per point)")
-    print("  • combined_long_debug.csv (long format for debugging)")
-    print(f"📄 Columns: {tidy.columns.tolist()}")
-    print(f"📊 Shape: {tidy.shape}")
+    print(f"✅ Rebuilt {out_csv}")
+    print(f"🪪 Debug long CSV: {out_long_debug}")
+    print(f"Columns: {wide.columns.tolist()}")
+    print(f"Shape: {wide.shape}")
 
 if __name__ == "__main__":
-    main()
+    rebuild()

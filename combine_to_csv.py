@@ -1,5 +1,4 @@
-#deprecated—use rebuild_combined.py
-
+# deprecated—use rebuild_combined.py
 
 import json
 import pandas as pd
@@ -18,9 +17,9 @@ def load_json_to_df(filepath):
     # Build a list of rows: each date-variable pair becomes a row
     rows = []
     for var, date_dict in params.items():
-        for date, value in date_dict.items():
+        for date_key, value in date_dict.items():
             rows.append({
-                "date": date,
+                "date": str(date_key),   # POWER provides YYYYMMDD
                 "variable": var,
                 "value": value,
                 "latitude": lat,
@@ -40,16 +39,27 @@ def combine_jsons_to_csv(folder='.', output='combined_data.csv'):
 
     # Load and combine all JSONs
     all_dfs = [load_json_to_df(f) for f in all_files]
-    combined = pd.concat(all_dfs, ignore_index=True)
+    combined_long = pd.concat(all_dfs, ignore_index=True)
+
+    # Parse POWER YYYYMMDD into datetime.date (no epoch!)
+    combined_long["date"] = pd.to_datetime(
+        combined_long["date"].astype(str).str.zfill(8),
+        format="%Y%m%d",
+        errors="coerce"
+    ).dt.date
 
     # Pivot variables into columns (e.g., T2M, PRECTOTCORR, RH2M, etc.)
-    combined = combined.pivot_table(
+    combined = combined_long.pivot_table(
         index=["date", "latitude", "longitude"],
         columns="variable",
-        values="value"
+        values="value",
+        aggfunc="mean"  # safe if duplicates exist
     ).reset_index()
 
-    # Save clean combined dataset
+    # Clean up: drop duplicates, sort
+    combined = combined.drop_duplicates().sort_values(["latitude", "longitude", "date"])
+
+    # Save clean combined dataset with ISO date
     combined.to_csv(output, index=False)
     print(f"✅ Combined {len(all_files)} JSON files into {output}")
     print(f"📄 Columns: {combined.columns.tolist()}")
